@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Env files
+.env
+
+# Build and dist
+build/
+dist/
+*.egg-info/
+
+# Coverage
+.coverage
+htmlcov/
+
+# OS and editor
+.DS_Store
+.vscode/
+
+# Frontend artifacts
+node_modules/
+
+# Logs
+*.log
