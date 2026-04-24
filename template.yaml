@@ -28,11 +28,10 @@ Resources:
   PipelineApi:
     Type: AWS::Serverless::Api
     Properties:
-      Name: !Sub "${AppName}-${StageName}-api"
       StageName: !Ref StageName
       Cors:
         AllowMethods: "'POST,OPTIONS'"
-        AllowHeaders: "'Content-Type'"
+        AllowHeaders: "'*'"
         AllowOrigin: "'*'"
 
   PipelineBucket:
@@ -98,7 +97,6 @@ Resources:
   ProductPipelineFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${AppName}-${StageName}-processor"
       CodeUri: .
       Handler: src/lambda_handler.lambda_handler
       Role: !GetAtt ProductPipelineLambdaRole.Arn

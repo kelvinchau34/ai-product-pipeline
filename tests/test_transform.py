@@ -62,3 +62,191 @@ def test_ai_enhancer_skips_when_no_provider() -> None:
     assert result["enhanced_count"] == 0
     assert result["skipped_count"] == 1
 
+
+def test_exporter_body_html_uses_reference_template_sections() -> None:
+    """Exporter should produce reference template markup with mapped section content."""
+    product = {
+        "title": "Wallie wall drawer",
+        "description": "Short fallback description",
+        "description_long": "Long product story",
+        "designs_available": "Available in oak and walnut",
+        "fabric_colour": "Walnut",
+        "height_mm": "100",
+        "width_mm": "225",
+        "depth_mm": "300",
+        "weight_display": "3,00",
+        "certifications": "FSC, Prop 65",
+        "care_guide_url": "https://example.com/care.pdf",
+        "assembly_instruction_url": "https://example.com/assembly.pdf",
+        "sku": "WALLIE-1",
+        "price": "179.00",
+        "grams": 3000,
+        "weight_unit": "g",
+        "barcode": "123",
+        "images": [],
+        "image_alt_text": "Wallie",
+    }
+
+    row = exporter.create_main_product_row(product)
+    body_html = row["Body (HTML)"]
+
+    assert "<style>" in body_html
+    assert "<script>" in body_html
+    assert "<button class=\"collapsible\">Details</button>" in body_html
+    assert "Long product story" in body_html
+    assert "Available in oak and walnut" in body_html
+    assert "Walnut" in body_html
+    assert "Height: 10cm" in body_html
+    assert "Width: 22.5cm" in body_html
+    assert "Depth: 30cm" in body_html
+    assert "Weight: 3kg" in body_html
+    assert "<button class=\"collapsible\">Certifications</button>" in body_html
+    assert "FSC" in body_html
+    assert "Prop 65" in body_html
+    assert "<button class=\"collapsible\">Files</button>" in body_html
+    assert "https://example.com/care.pdf" in body_html
+    assert "https://example.com/assembly.pdf" in body_html
+
+
+def test_exporter_body_html_omits_optional_empty_sections() -> None:
+    """Exporter should omit Certifications and Files blocks when source data is missing."""
+    product = {
+        "title": "Simple Product",
+        "description": "Simple description",
+        "designs_available": "",
+        "fabric_colour": "",
+        "height_mm": "",
+        "width_mm": "",
+        "depth_mm": "",
+        "weight_display": "",
+        "certifications": "",
+        "care_guide_url": "",
+        "assembly_instruction_url": "",
+        "sku": "SIMPLE-1",
+        "price": "10",
+        "grams": 0,
+        "weight_unit": "g",
+        "barcode": "",
+        "images": [],
+        "image_alt_text": "Simple Product",
+    }
+
+    row = exporter.create_main_product_row(product)
+    body_html = row["Body (HTML)"]
+
+    assert "<button class=\"collapsible\">Certifications</button>" not in body_html
+    assert "<button class=\"collapsible\">Files</button>" not in body_html
+
+
+def test_apply_column_mapping_populates_internal_fields() -> None:
+    """Column mapping should map vendor headers to internal field keys."""
+    records = [{"Vendor Title": "Chair", "Vendor SKU": "C-1"}]
+    mapping = {"title": "Vendor Title", "sku": "Vendor SKU"}
+    mapped = normalise.apply_column_mapping(records, mapping)
+    assert mapped[0]["title"] == "Chair"
+    assert mapped[0]["sku"] == "C-1"
+
+
+def test_normalize_product_prefers_internal_fields() -> None:
+    """Normalization should use mapped internal fields when present."""
+    record = {
+        "title": "Mapped Chair",
+        "sku": "SKU-1",
+        "vendor": "Mapped Vendor",
+        "product_type": "Seating",
+        "tags": "Seating, Blue",
+        "price": "120",
+        "image_1": "https://example.com/1.jpg",
+        "materials": "Oak",
+        "description": "Short description",
+        "lead_time": "4 weeks",
+    }
+    normalized = normalise.normalize_product(record)
+    assert normalized["title"] == "Mapped Chair"
+    assert normalized["sku"] == "SKU-1"
+    assert normalized["vendor"] == "Mapped Vendor"
+    assert normalized["product_type"] == "Seating"
+    assert normalized["tags"] == "Seating, Blue"
+    assert normalized["images"] == ["https://example.com/1.jpg"]
+    assert normalized["lead_time"] == "4 weeks"
+
+
+def test_status_missing_fields_when_required_errors() -> None:
+    """Products with required-field errors should be missing_fields."""
+    record = {"title": "", "sku": ""}
+    handle_counts = validate.build_handle_counts([record])
+    issues = validate.generate_issues(record, handle_counts)
+    assert any(issue["code"] == "missing_title" for issue in issues)
+    assert validate.assign_status(issues) == "missing_fields"
+
+
+def test_status_needs_review_when_warnings_only() -> None:
+    """Products with warnings only should be needs_review."""
+    record = {
+        "title": "Chair",
+        "sku": "SKU-1",
+        "description": "Short description",
+        "price": "100",
+        "vendor": "Test Vendor",
+        "images": [],
+        "features": [],
+    }
+    handle_counts = validate.build_handle_counts([record])
+    issues = validate.generate_issues(record, handle_counts)
+    assert issues
+    assert validate.assign_status(issues) == "needs_review"
+
+
+def test_status_ready_when_no_issues() -> None:
+    """Products with no issues should be ready."""
+    record = {
+        "title": "Chair",
+        "sku": "SKU-1",
+        "description": "This description is long enough to pass the check.",
+        "price": "100",
+        "vendor": "Test Vendor",
+        "images": ["https://example.com/img.jpg"],
+        "height_mm": "10",
+        "width_mm": "10",
+        "depth_mm": "10",
+        "features": ["wood"],
+    }
+    handle_counts = validate.build_handle_counts([record])
+    issues = validate.generate_issues(record, handle_counts)
+    assert issues == []
+    assert validate.assign_status(issues) == "ready"
+
+
+def test_generate_issues_detects_duplicates_and_invalid_images() -> None:
+    """Issues should include duplicate_handle and invalid_image_url when applicable."""
+    record_a = {
+        "title": "Chair",
+        "sku": "SKU-1",
+        "description": "This description is long enough to pass the check.",
+        "price": "100",
+        "vendor": "Test Vendor",
+        "images": ["ftp://example.com/img.jpg"],
+        "height_mm": "10",
+        "width_mm": "10",
+        "depth_mm": "10",
+        "features": ["wood"],
+    }
+    record_b = {
+        "title": "Chair",
+        "sku": "SKU-2",
+        "description": "This description is long enough to pass the check.",
+        "price": "120",
+        "vendor": "Test Vendor",
+        "images": ["https://example.com/img.jpg"],
+        "height_mm": "12",
+        "width_mm": "12",
+        "depth_mm": "12",
+        "features": ["metal"],
+    }
+
+    handle_counts = validate.build_handle_counts([record_a, record_b])
+    issues = validate.generate_issues(record_a, handle_counts)
+    codes = {issue["code"] for issue in issues}
+    assert "duplicate_handle" in codes
+    assert "invalid_image_url" in codes
+

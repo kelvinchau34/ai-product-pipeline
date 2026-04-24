@@ -33,3 +33,4 @@ node_modules/
 
 # Logs
 *.log
+.aws-sam/

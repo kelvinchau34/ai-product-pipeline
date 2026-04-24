@@ -5,12 +5,28 @@ from __future__ import annotations
 import base64
 import json
 import os
+import uuid
 from pathlib import Path
 from typing import Any, Dict
 
 import boto3
 
-from src import pipeline
+from src import logger as pipeline_logger, pipeline
+
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST,OPTIONS",
+}
+
+
+def _http_response(status_code: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "statusCode": status_code,
+        "headers": CORS_HEADERS,
+        "body": json.dumps(payload),
+    }
 
 
 def _parse_event(event: Dict[str, Any]) -> Dict[str, Any]:
@@ -112,8 +128,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns:
         Lambda response with statusCode and body containing pipeline results
     """
+    # Initialize structured logger with unique job_id
+    job_id = str(uuid.uuid4())
+    plog = pipeline_logger.PipelineLogger(job_id=job_id)
+    plog.info("Lambda handler invoked", context_function_name=context.function_name if context else None)
+
     try:
         payload = _parse_event(event)
+        plog.debug("Event parsed successfully", payload_keys=list(payload.keys()))
 
         # Environment defaults
         default_bucket = os.getenv("PIPELINE_BUCKET", "")
@@ -134,6 +156,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         upload_shopify = payload.get("upload_shopify", default_upload_shopify)
         dry_run = payload.get("dry_run", False)
         ai_provider = payload.get("ai_provider", default_ai_provider)
+        column_mapping = payload.get("column_mapping")
 
         if dry_run:
             upload_shopify = False
@@ -146,12 +169,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         if input_key and not input_file:
             if not bucket:
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        "error": "bucket is required when input_key is provided",
-                    }),
-                }
+                plog.error("bucket is required when input_key is provided")
+                return _http_response(400, {
+                    "job_id": job_id,
+                    "error": "bucket is required when input_key is provided",
+                })
             input_file = f"s3://{bucket}/{input_key}"
 
         # Fallback to default input prefix when only a filename is provided
@@ -159,12 +181,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             input_file = f"s3://{bucket}/{input_prefix.strip('/')}/{input_file.lstrip('/')}"
 
         if not input_file:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    "error": "input_file or input_key parameter required",
-                }),
-            }
+            plog.error("input_file or input_key parameter required")
+            return _http_response(400, {
+                "job_id": job_id,
+                "error": "input_file or input_key parameter required",
+            })
 
         local_input_file = input_file
         if _is_s3_uri(input_file):
@@ -182,6 +203,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             output_csv_path=local_output_csv,
             upload_to_shopify=upload_shopify,
             ai_provider=ai_provider,
+            job_id=job_id,
+            column_mapping=column_mapping,
         )
 
         output_s3_uri = None
@@ -202,29 +225,34 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             result["output_s3_uri"] = output_s3_uri
             result["output_key"] = resolved_output_key
             result["download_url"] = download_url
+            plog.info(f"Exported to S3: {output_s3_uri}")
 
-        return {
-            "statusCode": 200 if result["success"] else 400,
-            "body": json.dumps({
-                "request": {
-                    "bucket": bucket,
-                    "file_name": file_name,
-                    "input_file": input_file,
-                    "output_csv": output_csv,
-                    "output_s3_uri": output_s3_uri,
-                    "download_url": download_url,
-                },
-                "result": _compact_result_for_response(result),
-            }),
+        response_body = {
+            "job_id": job_id,
+            "request": {
+                "bucket": bucket,
+                "file_name": file_name,
+                "input_file": input_file,
+                "output_csv": output_csv,
+                "output_s3_uri": output_s3_uri,
+                "download_url": download_url,
+            },
+            "result": _compact_result_for_response(result),
         }
+
+        # Add logging summary if available
+        if "logging" in result:
+            response_body["logging"] = result["logging"]
+
+        plog.info("Lambda handler completed successfully", status="success")
+        return _http_response(200 if result["success"] else 400, response_body)
 
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "error": f"Pipeline failed: {str(e)}",
-            }),
-        }
+        plog.error(f"Lambda handler failed: {str(e)}", status="failed")
+        return _http_response(500, {
+            "job_id": job_id,
+            "error": f"Pipeline failed: {str(e)}",
+        })
 
 
 if __name__ == "__main__":

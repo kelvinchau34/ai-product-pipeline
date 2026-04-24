@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import re
 from pathlib import Path
 from typing import Any, Dict, List
@@ -127,6 +128,239 @@ def format_description_as_html(description: str, dimensions: str = "", features:
     return "\n".join(html_parts)
 
 
+def _escape_text(value: Any) -> str:
+    return html.escape(str(value or "").strip())
+
+
+def _html_paragraph_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    lines = [html.escape(line.strip()) for line in text.replace("\r", "").split("\n") if line.strip()]
+    return "<br><br>".join(lines)
+
+
+def _parse_float(value: Any) -> float | None:
+    raw = str(value or "").strip().replace(",", ".")
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _format_mm_to_cm(value: Any) -> str:
+    mm = _parse_float(value)
+    if mm is None:
+        return ""
+    cm = mm / 10.0
+    if cm.is_integer():
+        return f"{int(cm)}cm"
+    return f"{cm:.1f}cm"
+
+
+def _format_weight_kg(value: Any) -> str:
+    kg = _parse_float(value)
+    if kg is None:
+        return ""
+    if kg.is_integer():
+        return f"{int(kg)}kg"
+    return f"{kg:.2f}".rstrip("0").rstrip(".") + "kg"
+
+
+def build_reference_body_html(product: Dict[str, Any]) -> str:
+    """Build Body (HTML) using the fixed reference template with dynamic content only."""
+    main_description = _html_paragraph_text(
+        product.get("description_long") or product.get("description") or product.get("title", "")
+    )
+
+    details_blocks: List[str] = []
+    designs_available = _escape_text(product.get("designs_available"))
+    if designs_available:
+        details_blocks.extend([
+            "  <h5>Designs Available</h5>",
+            f"  <p>{designs_available}</p>",
+            "  <br>",
+        ])
+
+    fabric_colour = _escape_text(product.get("fabric_colour"))
+    if fabric_colour:
+        details_blocks.extend([
+            "  <h5>Fabric Colour</h5>",
+            f"  <p>{fabric_colour}</p>",
+            "  <br>",
+        ])
+
+    height = _format_mm_to_cm(product.get("height_mm"))
+    width = _format_mm_to_cm(product.get("width_mm"))
+    depth = _format_mm_to_cm(product.get("depth_mm"))
+    weight = _format_weight_kg(product.get("weight_display"))
+    dimension_lines = []
+    if height:
+        dimension_lines.append(f"  <p>Height: {height}</p>")
+    if width:
+        dimension_lines.append(f"  <p>Width: {width}</p>")
+    if depth:
+        dimension_lines.append(f"  <p>Depth: {depth}</p>")
+    if weight:
+        dimension_lines.append(f"  <p>Weight: {weight}</p>")
+    if dimension_lines:
+        details_blocks.append("  <h5>Product Dimensions</h5>")
+        details_blocks.extend(dimension_lines)
+        details_blocks.append("  <br>")
+
+    details_section = [
+        "<button class=\"collapsible\">Details</button>",
+        "<div class=\"content\">",
+        "  <!-- These are where the variant details go -->",
+    ]
+    details_section.extend(details_blocks)
+    details_section.append("</div>")
+
+    certification_values = [
+        _escape_text(val)
+        for val in str(product.get("certifications") or "").split(",")
+        if str(val).strip()
+    ]
+    certifications_section: List[str] = []
+    if certification_values:
+        certifications_section.extend([
+            "<!-- This is for the certifications and warranties (not all products have both) if not, just removed-->",
+            "<button class=\"collapsible\">Certifications</button>",
+            "<div class=\"content\"> ",
+            "  <h5>Certifications</h5>",
+        ])
+        for cert in certification_values:
+            certifications_section.append(f"  <p>{cert}</p>")
+        certifications_section.extend([
+            "  <br> ",
+            "</div>",
+            "<br>",
+        ])
+
+    file_links = []
+    care_guide_url = str(product.get("care_guide_url") or "").strip()
+    assembly_instruction_url = str(product.get("assembly_instruction_url") or "").strip()
+    if care_guide_url:
+        file_links.append((care_guide_url, "Care and Maintenance"))
+    if assembly_instruction_url:
+        file_links.append((assembly_instruction_url, "Assembly instructions"))
+
+    files_section: List[str] = []
+    if file_links:
+        files_section.extend([
+            "<!-- This is for the files (not all products have) if not, just removed-->",
+            "<button class=\"collapsible\">Files</button>",
+            "<div class=\"content\">",
+        ])
+        for idx, (url, label) in enumerate(file_links):
+            safe_url = html.escape(url, quote=True)
+            safe_label = _escape_text(label)
+            files_section.append(f"  <a href=\"{safe_url}\">{safe_label}")
+            files_section.append("  </a>")
+            if idx < len(file_links) - 1:
+                files_section.append("  <br>")
+        files_section.append("</div>")
+
+    body_parts = [
+        "<style>",
+        "  .content-wrapper {",
+        "    max-height: 100px;",
+        "    overflow: hidden;",
+        "    position: relative;",
+        "    transition: max-height 0.3s ease-out;",
+        "  }",
+        "  ",
+        "  .content-wrapper.expanded {",
+        "    max-height: 500px;",
+        "  }",
+        "",
+        "  .read-more-button {",
+        "    display: block;",
+        "    margin-top: 15px;",
+        "    cursor: pointer;",
+        "    color: #736357;",
+        "  }",
+        "  ",
+        "  .collapsible {",
+        "    background-color: #FBF9F7;",
+        "    color: #736357;",
+        "    cursor: pointer;",
+        "    padding: 20px 0px;",
+        "    width: 100%;",
+        "    border: none;",
+        "    text-align: left;",
+        "    font-size: 15px;",
+        "  }",
+        "",
+        "  .collapsible:after {",
+        "    content: '\\002B';",
+        "    color: #736357;",
+        "    font-weight: bold;",
+        "    float: right;",
+        "    margin-left: 5px;",
+        "  }",
+        "",
+        "  .active:after {",
+        "    content: \"\\2212\";",
+        "  }",
+        "  ",
+        "  .content {",
+        "    padding: 0px 10px;",
+        "    max-height: 0;",
+        "    overflow: hidden;",
+        "    transition: max-height 0.2s ease-out;",
+        "    background-color: #FBF9F7;",
+        "  }",
+        "",
+        "</style>",
+        "<div id=\"myContent\" class=\"content-wrapper\">",
+        "  <!-- This is the Product Description -->",
+        f"  <p>{main_description}</p>",
+        "</div>",
+        "<span class=\"read-more-button\" onclick=\"toggleReadMore()\">+ More</span>",
+        "<br><br>",
+        "<!-- These are the dropdown tabs of information -->",
+    ]
+
+    body_parts.extend(details_section)
+    body_parts.extend(certifications_section)
+    body_parts.append("<br>")
+    body_parts.extend(files_section)
+    body_parts.extend([
+        "<script>",
+        "var coll = document.getElementsByClassName(\"collapsible\");",
+        "var i;",
+        "",
+        "for (i = 0; i < coll.length; i++) {",
+        "coll[i].addEventListener(\"click\", function() {",
+        "this.classList.toggle(\"active\");",
+        "var content = this.nextElementSibling;",
+        "if (content.style.maxHeight){",
+        "content.style.maxHeight = null;",
+        "} else {",
+        "content.style.maxHeight = content.scrollHeight + \"px\";",
+        "}",
+        "});",
+        "}",
+        "",
+        "function toggleReadMore() {",
+        "const content = document.getElementById('myContent');",
+        "content.classList.toggle('expanded');",
+        "const button = document.querySelector('.read-more-button');",
+        "if (content.classList.contains('expanded')) {",
+        "button.textContent = 'Show Less';",
+        "} else {",
+        "button.textContent = '+ More';",
+        "}",
+        "}",
+        "</script>",
+    ])
+
+    return "\n".join(body_parts)
+
+
 def create_main_product_row(product: Dict[str, Any]) -> Dict[str, str]:
     """
     Create the main Shopify product row from product data.
@@ -139,11 +373,7 @@ def create_main_product_row(product: Dict[str, Any]) -> Dict[str, str]:
     """
     handle = create_handle(product["title"])
     product_type = detect_product_type(product["title"], product.get("description", ""))
-    body_html = format_description_as_html(
-        product.get("description", ""),
-        product.get("dimensions", ""),
-        product.get("features", []),
-    )
+    body_html = build_reference_body_html(product)
 
     row = {header: "" for header in SHOPIFY_HEADERS}
     row.update(SHOPIFY_DEFAULTS)
