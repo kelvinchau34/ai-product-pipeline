@@ -12,7 +12,7 @@ def example_1_basic_pipeline() -> None:
     print("=== Example 1: Basic Pipeline ===\n")
 
     result = pipeline.process_products(
-        filepath="input_examples/sample_input.csv",
+        filepath="input_examples/sample-input.csv",
         export_csv=True,
         output_csv_path="output/shopify_import.csv",
         upload_to_shopify=False,  # Keep False unless Shopify is configured
@@ -29,7 +29,7 @@ def example_2_with_validation_inspection() -> None:
     print("=== Example 2: Validation Inspection ===\n")
 
     # Step 1: Ingest
-    ingest_result = ingest.load_csv("input_examples/sample_input.csv")
+    ingest_result = ingest.load_csv("input_examples/sample-input.csv")
     if not ingest_result["success"]:
         print(f"Error: {ingest_result['error']}")
         return
@@ -61,7 +61,7 @@ def example_3_incremental_processing() -> None:
     ingest_result = ingest.load_json("input_examples/sample_input.json")
     if not ingest_result["success"]:
         # Try CSV as fallback
-        ingest_result = ingest.load_csv("input_examples/sample_input.csv")
+        ingest_result = ingest.load_csv("input_examples/sample-input.csv")
 
     if not ingest_result["success"]:
         print(f"Error: {ingest_result['error']}")
@@ -99,7 +99,7 @@ def example_4_optional_shopify_upload() -> None:
 
     # Run full pipeline but enable upload
     result = pipeline.process_products(
-        filepath="input_examples/sample_input.csv",
+        filepath="input_examples/sample-input.csv",
         export_csv=True,
         output_csv_path="output/shopify_import_upload.csv",
         upload_to_shopify=True,  # Enable upload
@@ -122,7 +122,7 @@ def example_5_ai_enhancement() -> None:
     print("=== Example 5: AI Enhancement ===\n")
 
     result = pipeline.process_products(
-        filepath="input_examples/sample_input.csv",
+        filepath="input_examples/sample-input.csv",
         export_csv=True,
         output_csv_path="output/shopify_import_ai.csv",
         upload_to_shopify=False,
@@ -139,7 +139,7 @@ def example_6_using_config_dict() -> None:
     print("=== Example 6: Config Dict ===\n")
 
     config = {
-        "input_file": "input_examples/sample_input.csv",
+        "input_file": "input_examples/sample-input.csv",
         "output_csv": "output/config_example.csv",
         "export_csv": True,
         "upload_shopify": False,

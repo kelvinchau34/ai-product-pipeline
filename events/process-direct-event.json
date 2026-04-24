@@ -1,0 +1,8 @@
+{
+  "bucket": "replace-with-your-bucket",
+  "input_key": "input/sample-input-15.csv",
+  "output_key": "output/shopify_import.csv",
+  "export_csv": true,
+  "upload_shopify": false,
+  "ai_provider": null
+}
