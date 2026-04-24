@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: AI Product Pipeline MVP stack (Lambda + API Gateway + S3)
+
+Parameters:
+  AppName:
+    Type: String
+    Default: ai-product-pipeline
+  StageName:
+    Type: String
+    Default: dev
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 29
+    MemorySize: 1024
+    Tracing: Active
+    Environment:
+      Variables:
+        PIPELINE_BUCKET: !Ref PipelineBucket
+        INPUT_PREFIX: input
+        OUTPUT_PREFIX: output
+        DEFAULT_UPLOAD_SHOPIFY: "false"
+        DEFAULT_AI_PROVIDER: ""
+
+Resources:
+  PipelineApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AppName}-${StageName}-api"
+      StageName: !Ref StageName
+      Cors:
+        AllowMethods: "'POST,OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"
+
+  PipelineBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ProductPipelineLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AppName}-${StageName}-logs"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+        - PolicyName: !Sub "${AppName}-${StageName}-bucket-access"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt PipelineBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - input/*
+                      - output/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${PipelineBucket.Arn}/input/*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${PipelineBucket.Arn}/output/*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "${PipelineBucket.Arn}/output/*"
+
+  ProductPipelineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-${StageName}-processor"
+      CodeUri: .
+      Handler: src/lambda_handler.lambda_handler
+      Role: !GetAtt ProductPipelineLambdaRole.Arn
+      Architectures:
+        - x86_64
+      Events:
+        ProcessProducts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PipelineApi
+            Path: /process
+            Method: post
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL for /process
+    Value: !Sub "https://${PipelineApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/process"
+
+  BucketName:
+    Description: Bucket for input/output CSV files
+    Value: !Ref PipelineBucket
+
+  LambdaFunctionName:
+    Description: Lambda function name
+    Value: !Ref ProductPipelineFunction
