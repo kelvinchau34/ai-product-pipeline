@@ -62,3 +62,78 @@ def test_ai_enhancer_skips_when_no_provider() -> None:
     assert result["enhanced_count"] == 0
     assert result["skipped_count"] == 1
 
+
+def test_exporter_body_html_uses_reference_template_sections() -> None:
+    """Exporter should produce reference template markup with mapped section content."""
+    product = {
+        "title": "Wallie wall drawer",
+        "description": "Short fallback description",
+        "description_long": "Long product story",
+        "designs_available": "Available in oak and walnut",
+        "fabric_colour": "Walnut",
+        "height_mm": "100",
+        "width_mm": "225",
+        "depth_mm": "300",
+        "weight_display": "3,00",
+        "certifications": "FSC, Prop 65",
+        "care_guide_url": "https://example.com/care.pdf",
+        "assembly_instruction_url": "https://example.com/assembly.pdf",
+        "sku": "WALLIE-1",
+        "price": "179.00",
+        "grams": 3000,
+        "weight_unit": "g",
+        "barcode": "123",
+        "images": [],
+        "image_alt_text": "Wallie",
+    }
+
+    row = exporter.create_main_product_row(product)
+    body_html = row["Body (HTML)"]
+
+    assert "<style>" in body_html
+    assert "<script>" in body_html
+    assert "<button class=\"collapsible\">Details</button>" in body_html
+    assert "Long product story" in body_html
+    assert "Available in oak and walnut" in body_html
+    assert "Walnut" in body_html
+    assert "Height: 10cm" in body_html
+    assert "Width: 22.5cm" in body_html
+    assert "Depth: 30cm" in body_html
+    assert "Weight: 3kg" in body_html
+    assert "<button class=\"collapsible\">Certifications</button>" in body_html
+    assert "FSC" in body_html
+    assert "Prop 65" in body_html
+    assert "<button class=\"collapsible\">Files</button>" in body_html
+    assert "https://example.com/care.pdf" in body_html
+    assert "https://example.com/assembly.pdf" in body_html
+
+
+def test_exporter_body_html_omits_optional_empty_sections() -> None:
+    """Exporter should omit Certifications and Files blocks when source data is missing."""
+    product = {
+        "title": "Simple Product",
+        "description": "Simple description",
+        "designs_available": "",
+        "fabric_colour": "",
+        "height_mm": "",
+        "width_mm": "",
+        "depth_mm": "",
+        "weight_display": "",
+        "certifications": "",
+        "care_guide_url": "",
+        "assembly_instruction_url": "",
+        "sku": "SIMPLE-1",
+        "price": "10",
+        "grams": 0,
+        "weight_unit": "g",
+        "barcode": "",
+        "images": [],
+        "image_alt_text": "Simple Product",
+    }
+
+    row = exporter.create_main_product_row(product)
+    body_html = row["Body (HTML)"]
+
+    assert "<button class=\"collapsible\">Certifications</button>" not in body_html
+    assert "<button class=\"collapsible\">Files</button>" not in body_html
+

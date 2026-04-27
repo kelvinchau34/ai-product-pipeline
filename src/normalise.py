@@ -181,10 +181,16 @@ def normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
     # Combine features (materials)
     features = materials if materials else []
 
+    product_text = str(clean_value(record.get("Product Text"), "")).strip()
+    description_2 = str(clean_value(record.get("Description 2"), "")).strip()
+
     return {
         "handle": str(clean_value(record.get("Item no."), "")).strip().lower(),
         "title": title,
         "description": description_text,
+        "description_long": product_text or description_text,
+        "designs_available": description_2,
+        "fabric_colour": colour,
         "body_html": build_description(record),
         "vendor": "WOUD",
         "product_type": category,
@@ -202,7 +208,14 @@ def normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
         "price": price_str,
         "grams": grams,
         "weight_unit": "g",
+        "weight_display": str(clean_value(record.get("Weight"), "")).strip(),
         "barcode": str(clean_value(record.get("EAN"), "")).strip(),
+        "height_mm": clean_value(record.get("Height mm"), ""),
+        "width_mm": clean_value(record.get("Width mm"), ""),
+        "depth_mm": clean_value(record.get("Length mm"), ""),
+        "certifications": str(clean_value(record.get("Certifications"), "")).strip(),
+        "care_guide_url": str(clean_value(record.get("Care guide"), "")).strip(),
+        "assembly_instruction_url": str(clean_value(record.get("Assembly instruction"), "")).strip(),
         "images": extract_images(record),
         "image_src": "",
         "image_alt_text": title,
