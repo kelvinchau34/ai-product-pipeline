@@ -14,6 +14,21 @@ import boto3
 from src import logger as pipeline_logger, pipeline
 
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST,OPTIONS",
+}
+
+
+def _http_response(status_code: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "statusCode": status_code,
+        "headers": CORS_HEADERS,
+        "body": json.dumps(payload),
+    }
+
+
 def _parse_event(event: Dict[str, Any]) -> Dict[str, Any]:
     """Parse direct Lambda events and API Gateway proxy events."""
     body = event.get("body")
@@ -154,13 +169,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if input_key and not input_file:
             if not bucket:
                 plog.error("bucket is required when input_key is provided")
-                return {
-                    "statusCode": 400,
-                    "body": json.dumps({
-                        "job_id": job_id,
-                        "error": "bucket is required when input_key is provided",
-                    }),
-                }
+                return _http_response(400, {
+                    "job_id": job_id,
+                    "error": "bucket is required when input_key is provided",
+                })
             input_file = f"s3://{bucket}/{input_key}"
 
         # Fallback to default input prefix when only a filename is provided
@@ -169,13 +181,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         if not input_file:
             plog.error("input_file or input_key parameter required")
-            return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    "job_id": job_id,
-                    "error": "input_file or input_key parameter required",
-                }),
-            }
+            return _http_response(400, {
+                "job_id": job_id,
+                "error": "input_file or input_key parameter required",
+            })
 
         local_input_file = input_file
         if _is_s3_uri(input_file):
@@ -234,20 +243,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             response_body["logging"] = result["logging"]
 
         plog.info("Lambda handler completed successfully", status="success")
-        return {
-            "statusCode": 200 if result["success"] else 400,
-            "body": json.dumps(response_body),
-        }
+        return _http_response(200 if result["success"] else 400, response_body)
 
     except Exception as e:
         plog.error(f"Lambda handler failed: {str(e)}", status="failed")
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "job_id": job_id,
-                "error": f"Pipeline failed: {str(e)}",
-            }),
-        }
+        return _http_response(500, {
+            "job_id": job_id,
+            "error": f"Pipeline failed: {str(e)}",
+        })
 
 
 if __name__ == "__main__":
