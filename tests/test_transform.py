@@ -138,6 +138,39 @@ def test_exporter_body_html_omits_optional_empty_sections() -> None:
     assert "<button class=\"collapsible\">Files</button>" not in body_html
 
 
+def test_apply_column_mapping_populates_internal_fields() -> None:
+    """Column mapping should map vendor headers to internal field keys."""
+    records = [{"Vendor Title": "Chair", "Vendor SKU": "C-1"}]
+    mapping = {"title": "Vendor Title", "sku": "Vendor SKU"}
+    mapped = normalise.apply_column_mapping(records, mapping)
+    assert mapped[0]["title"] == "Chair"
+    assert mapped[0]["sku"] == "C-1"
+
+
+def test_normalize_product_prefers_internal_fields() -> None:
+    """Normalization should use mapped internal fields when present."""
+    record = {
+        "title": "Mapped Chair",
+        "sku": "SKU-1",
+        "vendor": "Mapped Vendor",
+        "product_type": "Seating",
+        "tags": "Seating, Blue",
+        "price": "120",
+        "image_1": "https://example.com/1.jpg",
+        "materials": "Oak",
+        "description": "Short description",
+        "lead_time": "4 weeks",
+    }
+    normalized = normalise.normalize_product(record)
+    assert normalized["title"] == "Mapped Chair"
+    assert normalized["sku"] == "SKU-1"
+    assert normalized["vendor"] == "Mapped Vendor"
+    assert normalized["product_type"] == "Seating"
+    assert normalized["tags"] == "Seating, Blue"
+    assert normalized["images"] == ["https://example.com/1.jpg"]
+    assert normalized["lead_time"] == "4 weeks"
+
+
 def test_status_missing_fields_when_required_errors() -> None:
     """Products with required-field errors should be missing_fields."""
     record = {"title": "", "sku": ""}

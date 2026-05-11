@@ -156,6 +156,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         upload_shopify = payload.get("upload_shopify", default_upload_shopify)
         dry_run = payload.get("dry_run", False)
         ai_provider = payload.get("ai_provider", default_ai_provider)
+        column_mapping = payload.get("column_mapping")
 
         if dry_run:
             upload_shopify = False
@@ -203,6 +204,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             upload_to_shopify=upload_shopify,
             ai_provider=ai_provider,
             job_id=job_id,
+            column_mapping=column_mapping,
         )
 
         output_s3_uri = None

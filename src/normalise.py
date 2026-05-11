@@ -8,6 +8,25 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
+INTERNAL_FIELDS = [
+    "title",
+    "sku",
+    "barcode",
+    "price",
+    "vendor",
+    "product_type",
+    "description",
+    "dimensions",
+    "materials",
+    "colours",
+    "image_1",
+    "image_2",
+    "image_3",
+    "tags",
+    "weight",
+    "lead_time",
+]
+
 
 def clean_value(val: Any, default: Any = None) -> Any:
     """
@@ -140,6 +159,48 @@ def build_description(record: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def build_description_from_internal(record: Dict[str, Any]) -> str:
+    """Build HTML description from internal mapped fields."""
+    parts = []
+    description = str(clean_value(record.get("description"), "")).strip()
+    if description:
+        parts.append(description)
+
+    materials = str(clean_value(record.get("materials"), "")).strip()
+    if materials:
+        parts.append(f"<p><strong>Materials:</strong> {materials}</p>")
+
+    dimensions = str(clean_value(record.get("dimensions"), "")).strip()
+    if dimensions:
+        parts.append(f"<p><strong>Dimensions:</strong> {dimensions}</p>")
+
+    lead_time = str(clean_value(record.get("lead_time"), "")).strip()
+    if lead_time:
+        parts.append(f"<p><strong>Lead time:</strong> {lead_time}</p>")
+
+    return "\n".join(parts)
+
+
+def apply_column_mapping(
+    records: List[Dict[str, Any]],
+    mapping: Dict[str, str] | None,
+) -> List[Dict[str, Any]]:
+    """Apply a column mapping to raw records, preserving original keys."""
+    if not mapping:
+        return records
+
+    mapped_records: List[Dict[str, Any]] = []
+    for record in records:
+        mapped = dict(record)
+        for internal_field in INTERNAL_FIELDS:
+            source_column = mapping.get(internal_field)
+            if source_column and source_column in record:
+                mapped[internal_field] = record.get(source_column)
+        mapped_records.append(mapped)
+
+    return mapped_records
+
+
 def normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
     """
     Normalize a single product record to standard fields.
@@ -152,31 +213,48 @@ def normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
         Normalized product dict with standard keys
     """
     # Extract key fields
-    description_text = clean_value(record.get("Description"), "") or clean_value(
+    internal_description = clean_value(record.get("description"), "")
+    description_text = internal_description or clean_value(record.get("Description"), "") or clean_value(
         record.get("Description 2"), ""
     )
-    title = str(description_text).strip() or "Unnamed Product"
+    title = str(clean_value(record.get("title"), "") or description_text).strip() or "Unnamed Product"
 
     # Extract price (default to German EUR price)
-    price_raw = clean_value(record.get("DE RRP incl. VAT (EUR)"), "0.00")
+    price_raw = clean_value(record.get("price"), None)
+    if price_raw is None:
+        price_raw = clean_value(record.get("DE RRP incl. VAT (EUR)"), "0.00")
     price_str = str(price_raw).replace(",", ".").strip()
 
     # Extract and normalize weight
-    weight_raw = clean_value(record.get("Weight"), "0")
+    weight_raw = clean_value(record.get("weight"), None)
+    if weight_raw is None:
+        weight_raw = clean_value(record.get("Weight"), "0")
     grams = parse_weight(str(weight_raw))
 
     # Extract category (maps to Shopify product_type)
-    category = clean_value(record.get("Category"), "General").strip()
+    category = clean_value(record.get("product_type"), None)
+    if category is None:
+        category = clean_value(record.get("Category"), "General")
+    category = str(category).strip()
 
     # Extract colour and materials as tags/features
-    colour = clean_value(record.get("Colour"), "").strip()
-    materials = extract_materials(clean_value(record.get("Materials"), ""))
+    colour = clean_value(record.get("colours"), None)
+    if colour is None:
+        colour = clean_value(record.get("Colour"), "")
+    colour = str(colour).strip()
+
+    raw_materials = clean_value(record.get("materials"), None)
+    if raw_materials is None:
+        raw_materials = clean_value(record.get("Materials"), "")
+    materials = extract_materials(raw_materials)
 
     # Build tags (colour + category)
-    tags_list = [category]
-    if colour:
-        tags_list.append(colour)
-    tags_str = ", ".join(tags_list)
+    tags_str = str(clean_value(record.get("tags"), "")).strip()
+    if not tags_str:
+        tags_list = [category] if category else []
+        if colour:
+            tags_list.append(colour)
+        tags_str = ", ".join(tags_list)
 
     # Combine features (materials)
     features = materials if materials else []
@@ -184,39 +262,56 @@ def normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
     product_text = str(clean_value(record.get("Product Text"), "")).strip()
     description_2 = str(clean_value(record.get("Description 2"), "")).strip()
 
-    return {
-        "handle": str(clean_value(record.get("Item no."), "")).strip().lower(),
-        "title": title,
-        "description": description_text,
-        "description_long": product_text or description_text,
-        "designs_available": description_2,
-        "fabric_colour": colour,
-        "body_html": build_description(record),
-        "vendor": "WOUD",
-        "product_type": category,
-        "tags": tags_str,
-        "status": "active" if clean_value(record.get("Item status"), "").upper() == "ACTIVE" else "draft",
-        "dimensions": ", ".join(
+    mapped_images = [
+        str(clean_value(record.get("image_1"), "")).strip(),
+        str(clean_value(record.get("image_2"), "")).strip(),
+        str(clean_value(record.get("image_3"), "")).strip(),
+    ]
+    images = [img for img in mapped_images if img]
+    if not images:
+        images = extract_images(record)
+
+    dimensions = str(clean_value(record.get("dimensions"), "")).strip()
+    if not dimensions:
+        dimensions = ", ".join(
             [
                 f"{k}: {clean_value(record.get(k), '')}mm"
                 for k in ["Length mm", "Width mm", "Height mm"]
                 if clean_value(record.get(k), "")
             ]
-        ),
+        )
+
+    lead_time = str(clean_value(record.get("lead_time"), "")).strip()
+    body_html = build_description_from_internal(record) if internal_description or lead_time else build_description(record)
+
+    return {
+        "handle": str(clean_value(record.get("handle"), None) or clean_value(record.get("Item no."), "")).strip().lower(),
+        "title": title,
+        "description": description_text,
+        "description_long": product_text or description_text,
+        "designs_available": description_2,
+        "fabric_colour": colour,
+        "body_html": body_html,
+        "vendor": str(clean_value(record.get("vendor"), "WOUD")).strip() or "WOUD",
+        "product_type": category,
+        "tags": tags_str,
+        "status": "active" if clean_value(record.get("Item status"), "").upper() == "ACTIVE" else "draft",
+        "dimensions": dimensions,
         "features": features,
-        "sku": str(clean_value(record.get("Item no."), "")).strip(),
+        "sku": str(clean_value(record.get("sku"), None) or clean_value(record.get("Item no."), "")).strip(),
         "price": price_str,
         "grams": grams,
         "weight_unit": "g",
-        "weight_display": str(clean_value(record.get("Weight"), "")).strip(),
-        "barcode": str(clean_value(record.get("EAN"), "")).strip(),
+        "weight_display": str(clean_value(record.get("weight"), None) or clean_value(record.get("Weight"), "")).strip(),
+        "barcode": str(clean_value(record.get("barcode"), None) or clean_value(record.get("EAN"), "")).strip(),
         "height_mm": clean_value(record.get("Height mm"), ""),
         "width_mm": clean_value(record.get("Width mm"), ""),
         "depth_mm": clean_value(record.get("Length mm"), ""),
         "certifications": str(clean_value(record.get("Certifications"), "")).strip(),
         "care_guide_url": str(clean_value(record.get("Care guide"), "")).strip(),
         "assembly_instruction_url": str(clean_value(record.get("Assembly instruction"), "")).strip(),
-        "images": extract_images(record),
+        "lead_time": lead_time,
+        "images": images,
         "image_src": "",
         "image_alt_text": title,
     }

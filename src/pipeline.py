@@ -71,6 +71,7 @@ def process_products(
     output_csv_path: str | None = None,
     upload_to_shopify: bool = False,
     ai_provider: str | None = None,
+    column_mapping: Dict[str, str] | None = None,
     job_id: str | None = None,
 ) -> Dict[str, Any]:
     """
@@ -138,7 +139,8 @@ def process_products(
 
         # Stage 2: Normalize
         with plog.step("normalize"):
-            normalize_result = normalise.normalize_records(records)
+            mapped_records = normalise.apply_column_mapping(records, column_mapping)
+            normalize_result = normalise.normalize_records(mapped_records)
             result["stages"]["normalize"] = normalize_result
 
             if not normalize_result["success"]:
@@ -283,4 +285,5 @@ def process_with_config(config: Dict[str, Any]) -> Dict[str, Any]:
         output_csv_path=config.get("output_csv"),
         upload_to_shopify=config.get("upload_shopify", False),
         ai_provider=config.get("ai_provider"),
+        column_mapping=config.get("column_mapping"),
     )
