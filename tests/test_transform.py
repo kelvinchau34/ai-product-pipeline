@@ -137,3 +137,83 @@ def test_exporter_body_html_omits_optional_empty_sections() -> None:
     assert "<button class=\"collapsible\">Certifications</button>" not in body_html
     assert "<button class=\"collapsible\">Files</button>" not in body_html
 
+
+def test_status_missing_fields_when_required_errors() -> None:
+    """Products with required-field errors should be missing_fields."""
+    record = {"title": "", "sku": ""}
+    handle_counts = validate.build_handle_counts([record])
+    issues = validate.generate_issues(record, handle_counts)
+    assert any(issue["code"] == "missing_title" for issue in issues)
+    assert validate.assign_status(issues) == "missing_fields"
+
+
+def test_status_needs_review_when_warnings_only() -> None:
+    """Products with warnings only should be needs_review."""
+    record = {
+        "title": "Chair",
+        "sku": "SKU-1",
+        "description": "Short description",
+        "price": "100",
+        "vendor": "Test Vendor",
+        "images": [],
+        "features": [],
+    }
+    handle_counts = validate.build_handle_counts([record])
+    issues = validate.generate_issues(record, handle_counts)
+    assert issues
+    assert validate.assign_status(issues) == "needs_review"
+
+
+def test_status_ready_when_no_issues() -> None:
+    """Products with no issues should be ready."""
+    record = {
+        "title": "Chair",
+        "sku": "SKU-1",
+        "description": "This description is long enough to pass the check.",
+        "price": "100",
+        "vendor": "Test Vendor",
+        "images": ["https://example.com/img.jpg"],
+        "height_mm": "10",
+        "width_mm": "10",
+        "depth_mm": "10",
+        "features": ["wood"],
+    }
+    handle_counts = validate.build_handle_counts([record])
+    issues = validate.generate_issues(record, handle_counts)
+    assert issues == []
+    assert validate.assign_status(issues) == "ready"
+
+
+def test_generate_issues_detects_duplicates_and_invalid_images() -> None:
+    """Issues should include duplicate_handle and invalid_image_url when applicable."""
+    record_a = {
+        "title": "Chair",
+        "sku": "SKU-1",
+        "description": "This description is long enough to pass the check.",
+        "price": "100",
+        "vendor": "Test Vendor",
+        "images": ["ftp://example.com/img.jpg"],
+        "height_mm": "10",
+        "width_mm": "10",
+        "depth_mm": "10",
+        "features": ["wood"],
+    }
+    record_b = {
+        "title": "Chair",
+        "sku": "SKU-2",
+        "description": "This description is long enough to pass the check.",
+        "price": "120",
+        "vendor": "Test Vendor",
+        "images": ["https://example.com/img.jpg"],
+        "height_mm": "12",
+        "width_mm": "12",
+        "depth_mm": "12",
+        "features": ["metal"],
+    }
+
+    handle_counts = validate.build_handle_counts([record_a, record_b])
+    issues = validate.generate_issues(record_a, handle_counts)
+    codes = {issue["code"] for issue in issues}
+    assert "duplicate_handle" in codes
+    assert "invalid_image_url" in codes
+
