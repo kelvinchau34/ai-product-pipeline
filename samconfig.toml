@@ -1,0 +1,22 @@
+version = 0.1
+
+[staging.deploy.parameters]
+stack_name = "ai-product-pipeline-dev"
+region = "ap-southeast-2"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "StageName=staging"
+s3_prefix = "ai-product-pipeline"
+# resolve_s3 = true lets SAM create/manage the deployment bucket automatically
+resolve_s3 = true
+confirm_changeset = false
+fail_on_empty_changeset = false
+
+[prod.deploy.parameters]
+stack_name = "ai-product-pipeline-prod"
+region = "ap-southeast-2"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "StageName=prod"
+s3_prefix = "ai-product-pipeline"
+resolve_s3 = true
+confirm_changeset = false
+fail_on_empty_changeset = false

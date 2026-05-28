@@ -1,12 +1,14 @@
 # AI Product Pipeline
 
+[![CI](https://github.com/kelvinchau34/ai-product-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/kelvinchau34/ai-product-pipeline/actions/workflows/ci.yml)
+
 Lightweight pipeline to transform supplier product data into Shopify-ready CSV using deterministic processing with optional AI enhancement.
 
 This repository is set up for:
 
 - Python backend suitable for AWS Lambda
 - Static frontend for upload and status checks
-- GitHub Actions CI
+- GitHub Actions CI/CD with staging and production environments
 
 ## Project Structure
 
@@ -108,6 +110,49 @@ See sample events:
 
 - events/process-api-event.json
 - events/process-direct-event.json
+
+## Update Workflow
+
+Day-to-day process for shipping a code change:
+
+```
+1. Make changes locally
+   └── edit src/, frontend/src/, tests/, etc.
+
+2. Test locally before pushing
+   ├── pytest -q                          (backend)
+   └── cd frontend && npm test -- --run   (frontend)
+
+3. Push to a feature branch
+   └── git push origin feature/my-change
+
+4. Open a Pull Request → main
+   └── CI runs automatically:
+       ├── backend: ruff lint + pytest
+       └── frontend: vitest + build
+       (PR is blocked until both pass)
+
+5. Merge PR → main
+   └── deploy.yml triggers automatically:
+       ├── re-runs CI as a gate
+       ├── deploys to staging (auto)
+       └── deploys to production (requires manual approval in GitHub)
+```
+
+### One-time GitHub setup (required before first deploy)
+
+1. **Create two GitHub Environments** in repo Settings → Environments:
+   - `staging` — no protection rules (auto-deploys)
+   - `production` — add yourself as a required reviewer
+
+2. **Add secret** in repo Settings → Secrets → Actions:
+   - `AWS_GITHUB_ACTIONS_ROLE_ARN` — the IAM role ARN GitHub assumes to deploy
+
+3. **Bootstrap SAM** (run once locally, then commit `samconfig.toml`):
+   ```bash
+   sam build
+   sam deploy --guided --config-env staging
+   ```
 
 ## Incremental Build Plan
 

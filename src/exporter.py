@@ -87,7 +87,7 @@ def detect_product_type(title: str, description: str) -> str:
 
     for product_type, keywords in type_keywords.items():
         for keyword in keywords:
-            if keyword in text:
+            if re.search(r"\b" + re.escape(keyword) + r"\b", text):
                 return product_type
 
     return "furniture"

@@ -287,7 +287,7 @@ def normalize_product(record: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "handle": str(clean_value(record.get("handle"), None) or clean_value(record.get("Item no."), "")).strip().lower(),
         "title": title,
-        "description": description_text,
+        "description": str(description_text).strip(),
         "description_long": product_text or description_text,
         "designs_available": description_2,
         "fabric_colour": colour,
