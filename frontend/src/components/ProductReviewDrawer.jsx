@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import BeforeAfterPreview from './BeforeAfterPreview';
 import IssueBadge from './IssueBadge';
 import StatusBadge from './StatusBadge';
@@ -8,6 +8,7 @@ function ProductReviewDrawer({ product, onClose, onSave }) {
   const [editMode, setEditMode] = useState(false);
   const [localEdits, setLocalEdits] = useState({});
   const [saveNotice, setSaveNotice] = useState('');
+  const prevProductIdRef = useRef(null);
 
   const normalized = product?.normalized_record || {};
   const shopifyRow = product?.shopify_row || {};
@@ -15,8 +16,12 @@ function ProductReviewDrawer({ product, onClose, onSave }) {
 
   useEffect(() => {
     if (product) {
+      const isNewProduct = product.product_id !== prevProductIdRef.current;
+      prevProductIdRef.current = product.product_id;
       setEditMode(false);
-      setSaveNotice('');
+      if (isNewProduct) {
+        setSaveNotice('');
+      }
       setLocalEdits(toEditableState(product));
     }
   }, [product]);
@@ -45,16 +50,10 @@ function ProductReviewDrawer({ product, onClose, onSave }) {
   return (
     <div className="drawer-overlay" role="dialog" aria-modal="true">
       <div className="drawer">
-        <div className="drawer-header">
-          <div>
-            <p className="eyebrow">Product review</p>
-            <h2>{normalized.title || 'Untitled product'}</h2>
-            <div className="drawer-meta">
-              <span className="drawer-sku">SKU {normalized.sku || '—'}</span>
-              <StatusBadge status={product.status} />
-              <span>{issueCount} issues</span>
-            </div>
-          </div>
+        <div className="drawer-topbar">
+          <button className="back-button" type="button" onClick={onClose}>
+            ← Back to products
+          </button>
           <div className="drawer-actions">
             <button
               type="button"
@@ -63,9 +62,25 @@ function ProductReviewDrawer({ product, onClose, onSave }) {
             >
               {editMode ? 'Stop editing' : 'Edit fields'}
             </button>
-            <button className="ghost-button" type="button" onClick={onClose}>
-              Close
+            <button
+              type="button"
+              className="submit-button drawer-submit"
+              onClick={handleSave}
+              disabled={!editMode}
+            >
+              Save edits
             </button>
+          </div>
+        </div>
+
+        <div className="drawer-header">
+          <div>
+            <p className="eyebrow">Product review</p>
+            <h2>{normalized.title || 'Untitled product'}</h2>
+            <div className="drawer-meta">
+              <StatusBadge status={product.status} />
+              <span>{issueCount} issues</span>
+            </div>
           </div>
         </div>
 
@@ -95,7 +110,23 @@ function ProductReviewDrawer({ product, onClose, onSave }) {
           <div className="drawer-column">
             <section className="drawer-section">
               <h3>Original vendor data</h3>
-              <pre>{JSON.stringify(rawRecord, null, 2)}</pre>
+              <table className="vendor-table">
+                <tbody>
+                  {[
+                    'Item no.', 'Description', 'Description 2', 'EAN',
+                    'Category', 'Materials', 'Colour', 'Weight',
+                    'Length mm', 'Width mm', 'Height mm',
+                    'DE RRP incl. VAT (EUR)', 'Item status',
+                    'Packshot 1', 'Packshot 2', 'Lifestyle 1',
+                  ].filter((key) => rawRecord[key] != null && rawRecord[key] !== '' && String(rawRecord[key]).toLowerCase() !== 'nan')
+                    .map((key) => (
+                      <tr key={key}>
+                        <th>{key}</th>
+                        <td>{String(rawRecord[key])}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </section>
           </div>
           <div className="drawer-column">
@@ -105,7 +136,6 @@ function ProductReviewDrawer({ product, onClose, onSave }) {
                 {[
                   { key: 'title', label: 'Title' },
                   { key: 'handle', label: 'Handle' },
-                  { key: 'sku', label: 'SKU' },
                   { key: 'vendor', label: 'Vendor' },
                   { key: 'product_type', label: 'Product type' },
                   { key: 'tags', label: 'Tags' },
@@ -184,17 +214,6 @@ function ProductReviewDrawer({ product, onClose, onSave }) {
               </div>
             </section>
 
-            <div className="drawer-save">
-              <button
-                type="button"
-                className="submit-button"
-                onClick={handleSave}
-                disabled={!editMode}
-              >
-                Save edits
-              </button>
-              <p className="panel-subtitle">Edits are local-only until backend persistence is available.</p>
-            </div>
           </div>
         </div>
 

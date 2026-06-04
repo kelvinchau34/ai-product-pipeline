@@ -11,8 +11,7 @@ function UploadPanel({
   loading,
   warning,
   error,
-  mappingRequired,
-  mappingReady,
+  mappedCount,
 }) {
   const selectedName = file ? file.name : 'No file selected';
 
@@ -49,6 +48,13 @@ function UploadPanel({
         <p className="helper">{selectedName}</p>
       </div>
 
+      {mappedCount > 0 ? (
+        <div className="mapping-badge">
+          <span className="mapping-badge-dot" />
+          {mappedCount} columns auto-mapped
+        </div>
+      ) : null}
+
       <div className="toggles">
         <label className="toggle">
           <input
@@ -78,13 +84,18 @@ function UploadPanel({
       {warning ? <div className="notice warning">{warning}</div> : null}
       {error ? <div className="notice error">{error}</div> : null}
 
-      {mappingRequired && !mappingReady ? (
-        <div className="notice warning">Map required columns before processing.</div>
-      ) : null}
-
-      <button className="submit-button" type="submit" disabled={loading || (mappingRequired && !mappingReady)}>
+      <button className="submit-button" type="submit" disabled={loading}>
         {loading ? 'Processing…' : 'Process file'}
       </button>
+
+      {loading ? (
+        <div className="processing-status">
+          <div className="progress-bar">
+            <div className="progress-bar-fill" />
+          </div>
+          <p className="processing-label">Processing {file?.name} — this may take 10–30 seconds</p>
+        </div>
+      ) : null}
     </form>
   );
 }

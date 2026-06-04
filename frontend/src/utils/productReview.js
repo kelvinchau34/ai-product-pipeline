@@ -1,4 +1,4 @@
-const REQUIRED_FIELDS = ['title', 'sku'];
+const REQUIRED_FIELDS = ['title'];
 
 function removeResolvedIssues(issues, updates) {
   return (issues || []).filter((issue) => {

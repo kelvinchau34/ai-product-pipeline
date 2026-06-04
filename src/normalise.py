@@ -6,8 +6,6 @@ import math
 import re
 from typing import Any, Dict, List
 
-import pandas as pd
-
 INTERNAL_FIELDS = [
     "title",
     "sku",
@@ -41,9 +39,9 @@ def clean_value(val: Any, default: Any = None) -> Any:
     """
     if val is None:
         return default
-    if isinstance(val, float) and math.isnan(val):
+    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
         return default
-    if pd.isna(val):
+    if isinstance(val, str) and val.strip().lower() in ("nan", "none", "null", ""):
         return default
     return val
 

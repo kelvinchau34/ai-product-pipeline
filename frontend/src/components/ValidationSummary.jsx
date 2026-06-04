@@ -11,7 +11,7 @@ function ValidationSummary({ summary, loading }) {
     <section className="panel summary-panel">
       <div className="panel-header">
         <div>
-          <p className="eyebrow">Step 2</p>
+          <p className="eyebrow">Step 2 · Results</p>
           <h2>Validation summary</h2>
           <p className="panel-subtitle">Scan overall readiness before reviewing details.</p>
         </div>

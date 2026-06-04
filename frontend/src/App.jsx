@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   BulkActionToolbar,
-  ColumnMappingPanel,
   ExportPanel,
   ProductFilters,
   ProductReviewDrawer,
@@ -21,11 +20,8 @@ import {
   toCsvContent,
 } from './utils/exportShopifyCsv';
 import {
-  applyPreset,
-  getRequiredFields,
   parseCsvHeaders,
   suggestMapping,
-  WOUD_PRESET,
 } from './utils/columnMapping';
 
 const DEFAULT_API_URL = import.meta.env.VITE_API_URL || '';
@@ -96,11 +92,6 @@ function App() {
 
     if (!file) {
       setError('Choose a CSV or JSON file to upload.');
-      return;
-    }
-
-    if (csvHeaders.length > 0 && !mappingReady) {
-      setError('Map required columns before processing.');
       return;
     }
 
@@ -213,11 +204,7 @@ function App() {
     setMappingReady(false);
     setMappingError('');
 
-    if (!nextFile) {
-      return;
-    }
-
-    if (!nextFile.name.toLowerCase().endsWith('.csv')) {
+    if (!nextFile || !nextFile.name.toLowerCase().endsWith('.csv')) {
       return;
     }
 
@@ -226,6 +213,7 @@ function App() {
     setCsvHeaders(headers);
     const suggested = suggestMapping(headers);
     setColumnMapping(suggested);
+    setMappingReady(true);
   }
 
   function handleApplyBulkAction() {
@@ -313,39 +301,8 @@ function App() {
             loading={loading}
             warning={warning}
             error={error}
-            mappingRequired={csvHeaders.length > 0}
-            mappingReady={mappingReady}
+            mappedCount={Object.values(columnMapping).filter(Boolean).length}
           />
-
-          {csvHeaders.length > 0 ? (
-            <ColumnMappingPanel
-              headers={csvHeaders}
-              mapping={columnMapping}
-              error={mappingError}
-              onApplyPreset={() => {
-                setColumnMapping((current) => ({
-                  ...current,
-                  ...applyPreset(csvHeaders, WOUD_PRESET),
-                }));
-              }}
-              onChange={(field, value) => {
-                setColumnMapping((current) => ({
-                  ...current,
-                  [field]: value,
-                }));
-              }}
-              onConfirm={() => {
-                const requiredFields = getRequiredFields();
-                const missing = requiredFields.filter((field) => !columnMapping[field]);
-                if (missing.length > 0) {
-                  setMappingError('Map required fields before continuing.');
-                  return;
-                }
-                setMappingError('');
-                setMappingReady(true);
-              }}
-            />
-          ) : null}
 
           <ValidationSummary summary={summary} loading={loading} />
 

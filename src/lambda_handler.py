@@ -106,7 +106,10 @@ def _compact_result_for_response(result: Dict[str, Any]) -> Dict[str, Any]:
         "success": result.get("success", False),
         "final_summary": result.get("final_summary", {}),
         "summary": result.get("summary", {}),
-        "products": result.get("products", []),
+        "products": [
+            {k: v for k, v in p.items() if k != "shopify_row"}
+            for p in result.get("products", [])
+        ],
         "stages": {},
     }
 
