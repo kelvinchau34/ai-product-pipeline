@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import uuid
 from pathlib import Path
@@ -21,11 +22,22 @@ CORS_HEADERS = {
 }
 
 
+def _sanitize_for_json(obj: Any) -> Any:
+    """Recursively replace NaN/Inf floats with None so json.dumps produces valid JSON."""
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
+
+
 def _http_response(status_code: int, payload: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "statusCode": status_code,
         "headers": CORS_HEADERS,
-        "body": json.dumps(payload),
+        "body": json.dumps(_sanitize_for_json(payload)),
     }
 
 
@@ -93,6 +105,8 @@ def _compact_result_for_response(result: Dict[str, Any]) -> Dict[str, Any]:
     compact = {
         "success": result.get("success", False),
         "final_summary": result.get("final_summary", {}),
+        "summary": result.get("summary", {}),
+        "products": result.get("products", []),
         "stages": {},
     }
 
