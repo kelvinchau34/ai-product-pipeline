@@ -1015,3 +1015,208 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── Portal navigation ─────────────────────────────────────────── */
+
+.portal-nav {
+  background: #141414;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  height: 52px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  gap: 0;
+}
+
+.portal-nav-brand {
+  font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #fff;
+  white-space: nowrap;
+  margin-right: 28px;
+  letter-spacing: -0.01em;
+}
+
+.portal-nav-links {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.portal-nav-link {
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+  font-size: 0.88rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 100ms, background 100ms;
+}
+
+.portal-nav-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.portal-nav-link.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.portal-nav-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 99px;
+  letter-spacing: 0.04em;
+}
+
+.portal-nav-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+}
+
+.role-chip {
+  background: rgba(14, 124, 134, 0.4);
+  color: rgba(180, 240, 244, 0.95);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.portal-logout-button {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: color 100ms, border-color 100ms;
+}
+
+.portal-logout-button:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.38);
+}
+
+/* ─── Login page ─────────────────────────────────────────────────── */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 24px;
+  padding: 44px 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.1);
+  text-align: center;
+}
+
+.login-title {
+  margin: 8px 0 0;
+  font-size: 1.9rem;
+  letter-spacing: -0.03em;
+}
+
+.login-subtitle {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.google-signin-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 20px;
+  border: 1px solid #d6d6d6;
+  border-radius: 12px;
+  background: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #3c4043;
+  margin-top: 24px;
+  transition: box-shadow 120ms, transform 120ms;
+}
+
+.google-signin-button:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+/* ─── Callback spinner ───────────────────────────────────────────── */
+
+.callback-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 20px auto 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Hours page ─────────────────────────────────────────────────── */
+
+.hours-placeholder {
+  max-width: 860px;
+  margin: 32px auto;
+}
+
+.hours-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.hours-feature-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.hours-feature-card strong {
+  font-size: 0.95rem;
+}
+
+.hours-feature-card span {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}

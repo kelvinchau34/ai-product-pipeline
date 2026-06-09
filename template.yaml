@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: AI Product Pipeline MVP stack (Lambda + API Gateway + S3)
+Description: AI Product Pipeline — internal portal (Lambda + API Gateway + S3 + Cognito)
 
 Parameters:
   AppName:
@@ -9,6 +9,20 @@ Parameters:
   StageName:
     Type: String
     Default: dev
+  # ── Auth parameters (set via samconfig.toml or --parameter-overrides) ──────
+  GoogleClientId:
+    Type: String
+    Default: ""
+    Description: Google OAuth 2.0 client ID (from Google Cloud Console)
+  GoogleClientSecret:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Google OAuth 2.0 client secret
+  FrontendUrl:
+    Type: String
+    Default: "http://localhost:5174"
+    Description: Deployed frontend URL — added to Cognito callback/logout allow-list
 
 Globals:
   Function:
@@ -25,15 +39,24 @@ Globals:
         DEFAULT_AI_PROVIDER: ""
 
 Resources:
+
+  # ── API Gateway ─────────────────────────────────────────────────────────────
   PipelineApi:
     Type: AWS::Serverless::Api
     Properties:
       StageName: !Ref StageName
       Cors:
         AllowMethods: "'POST,OPTIONS'"
-        AllowHeaders: "'*'"
+        AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+        AddDefaultAuthorizerToCorsPreflight: false  # OPTIONS must stay unauthenticated
 
+  # ── S3 bucket (pipeline CSV in/out) ────────────────────────────────────────
   PipelineBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -47,6 +70,7 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
+  # ── IAM role for pipeline Lambda ───────────────────────────────────────────
   ProductPipelineLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -63,45 +87,33 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
                 Resource: arn:aws:logs:*:*:*
         - PolicyName: !Sub "${AppName}-${StageName}-bucket-access"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action:
-                  - s3:ListBucket
+                Action: [s3:ListBucket]
                 Resource: !GetAtt PipelineBucket.Arn
                 Condition:
                   StringLike:
-                    s3:prefix:
-                      - input/*
-                      - output/*
+                    s3:prefix: [input/*, output/*]
               - Effect: Allow
-                Action:
-                  - s3:GetObject
+                Action: [s3:GetObject]
                 Resource: !Sub "${PipelineBucket.Arn}/input/*"
               - Effect: Allow
-                Action:
-                  - s3:GetObject
-                Resource: !Sub "${PipelineBucket.Arn}/output/*"
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
+                Action: [s3:GetObject, s3:PutObject]
                 Resource: !Sub "${PipelineBucket.Arn}/output/*"
 
+  # ── Pipeline Lambda ─────────────────────────────────────────────────────────
   ProductPipelineFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
       Handler: src/lambda_handler.lambda_handler
       Role: !GetAtt ProductPipelineLambdaRole.Arn
-      Architectures:
-        - x86_64
+      Architectures: [x86_64]
       Events:
         ProcessProducts:
           Type: Api
@@ -110,15 +122,107 @@ Resources:
             Path: /process
             Method: post
 
+  # ── Cognito User Pool ───────────────────────────────────────────────────────
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${AppName}-${StageName}-users"
+      # Staff sign-in via Google only — no self-signup
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      AutoVerifiedAttributes: [email]
+      UsernameAttributes: [email]
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+      LambdaConfig:
+        # Adds custom:role claim to every JWT based on group membership
+        PreTokenGeneration: !GetAtt PreTokenFunction.Arn
+
+  # Cognito domain — used for Hosted UI and token endpoint
+  # Must be globally unique; change the prefix if this name is taken
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "${AppName}-${StageName}"
+      UserPoolId: !Ref UserPool
+
+  # App client — SPA (no secret, PKCE only)
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: GoogleIdentityProvider
+    Properties:
+      ClientName: !Sub "${AppName}-${StageName}-spa"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false          # public client (browser) — no secret
+      AllowedOAuthFlows: [code]      # Authorization Code grant only (+ PKCE)
+      AllowedOAuthScopes: [openid, email, profile]
+      AllowedOAuthFlowsUserPoolClient: true
+      CallbackURLs:
+        - http://localhost:5174/callback
+        - !Sub "${FrontendUrl}/callback"
+      LogoutURLs:
+        - http://localhost:5174/
+        - !Sub "${FrontendUrl}/"
+      SupportedIdentityProviders: [Google]
+      PreventUserExistenceErrors: ENABLED
+      ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
+
+  # Google as the identity provider
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: "openid email profile"
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub   # Google's stable user ID
+
+  # ── Pre Token Generation Lambda ────────────────────────────────────────────
+  PreTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/auth/pre_token_generation.lambda_handler
+      Description: Adds custom:role claim (manager/colleague) to Cognito JWT
+
+  # Cognito needs explicit permission to invoke this Lambda
+  PreTokenFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PreTokenFunction.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL for /process
     Value: !Sub "https://${PipelineApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/process"
 
   BucketName:
-    Description: Bucket for input/output CSV files
+    Description: S3 bucket for pipeline CSV files
     Value: !Ref PipelineBucket
 
   LambdaFunctionName:
-    Description: Lambda function name
+    Description: Pipeline Lambda function name
     Value: !Ref ProductPipelineFunction
+
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+
+  CognitoClientId:
+    Description: Cognito App Client ID (set as VITE_COGNITO_CLIENT_ID in frontend)
+    Value: !Ref UserPoolClient
+
+  CognitoDomain:
+    Description: Cognito Hosted UI domain (set as VITE_COGNITO_DOMAIN in frontend)
+    Value: !Sub "https://${AppName}-${StageName}.auth.${AWS::Region}.amazoncognito.com"
