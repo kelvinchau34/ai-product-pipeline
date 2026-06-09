@@ -157,20 +157,27 @@ function ProductReviewDrawer({ product, onClose, onSave }) {
                 ))}
               </div>
 
-              <label className="textarea-field">
+              <div className="textarea-field">
                 <span>Body HTML / Info section</span>
-                <textarea
-                  rows={6}
-                  value={localEdits.body_html || ''}
-                  disabled={!editMode}
-                  onChange={(event) =>
-                    setLocalEdits((current) => ({
-                      ...current,
-                      body_html: event.target.value,
-                    }))
-                  }
-                />
-              </label>
+                {editMode ? (
+                  <textarea
+                    rows={6}
+                    value={localEdits.body_html || ''}
+                    onChange={(event) =>
+                      setLocalEdits((current) => ({
+                        ...current,
+                        body_html: event.target.value,
+                      }))
+                    }
+                  />
+                ) : (
+                  <div
+                    className="body-html-preview"
+                    // eslint-disable-next-line react/no-danger
+                    dangerouslySetInnerHTML={{ __html: localEdits.body_html || '<em>No description</em>' }}
+                  />
+                )}
+              </div>
 
               <label className="textarea-field">
                 <span>Image URLs (one per line)</span>

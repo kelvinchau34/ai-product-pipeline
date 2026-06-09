@@ -5,11 +5,19 @@ function BeforeAfterPreview({ beforeTitle, afterTitle, beforeContent, afterConte
       <div className="compare-grid">
         <div className="compare-card">
           <span className="compare-label">{beforeTitle}</span>
-          <pre>{beforeContent || 'No vendor info available.'}</pre>
+          <p className="compare-text">{beforeContent || 'No vendor info available.'}</p>
         </div>
         <div className="compare-card">
           <span className="compare-label">{afterTitle}</span>
-          <pre>{afterContent || 'No Shopify info available.'}</pre>
+          {afterContent ? (
+            <div
+              className="compare-html"
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: afterContent }}
+            />
+          ) : (
+            <p className="compare-text">No Shopify info available.</p>
+          )}
         </div>
       </div>
     </section>
